@@ -11,18 +11,22 @@ import {
   Alert,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { colors, typography, spacing, radius } from '@/utils/constants';
 import { UserProfile } from '@/types/models';
 
+// Required for expo-auth-session OAuth redirect handling on mobile
+WebBrowser.maybeCompleteAuthSession();
+
 // ---------------------------------------------------------------------------
 // Profile helpers
 // ---------------------------------------------------------------------------
 
 async function fetchOrCreateProfile(userId: string, displayName: string | null): Promise<UserProfile> {
-  // Try fetching existing profile first
   const { data: existing, error: fetchError } = await supabase
     .from('profiles')
     .select('*')
@@ -110,6 +114,65 @@ export default function AuthScreen(): React.ReactElement {
     }
   }
 
+  // ── Google Sign In ─────────────────────────────────────────────────────────
+
+  async function handleGoogleSignIn(): Promise<void> {
+    try {
+      setIsLoading(true);
+
+      // Build the redirect URI that Supabase will send the user back to
+      const redirectUri = AuthSession.makeRedirectUri();
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUri,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (!data.url) throw new Error('No OAuth URL returned from Supabase.');
+
+      // Open the Google consent screen in an in-app browser
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+      if (result.type !== 'success') {
+        // User cancelled or browser closed — not an error
+        return;
+      }
+
+      // Extract the session tokens from the redirect URL
+      const url = result.url;
+      const params = new URLSearchParams(url.split('#')[1] ?? url.split('?')[1] ?? '');
+      const accessToken  = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (!accessToken || !refreshToken) {
+        throw new Error('Missing tokens in OAuth redirect.');
+      }
+
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+
+      if (sessionError) throw new Error(sessionError.message);
+      if (!sessionData.session || !sessionData.user) throw new Error('No session after Google sign in.');
+
+      const displayName = sessionData.user.user_metadata?.full_name as string | null ?? null;
+      const profile = await fetchOrCreateProfile(sessionData.user.id, displayName);
+
+      setSession(sessionData.session);
+      setUser(profile);
+    } catch (err: unknown) {
+      Alert.alert('Google sign in failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   // ── Email Sign In / Sign Up ────────────────────────────────────────────────
 
   async function handleEmailAuth(): Promise<void> {
@@ -158,14 +221,29 @@ export default function AuthScreen(): React.ReactElement {
         <Text style={styles.logo}>RUMBLA</Text>
         <Text style={styles.tagline}>Conquer your city, street by street.</Text>
 
-        {/* Apple Sign In */}
-        <AppleAuthentication.AppleAuthenticationButton
-          buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-          cornerRadius={radius.md}
-          style={styles.appleButton}
-          onPress={handleAppleSignIn}
-        />
+        {/* Apple Sign In — iOS only */}
+        {Platform.OS === 'ios' && (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+            cornerRadius={radius.md}
+            style={styles.appleButton}
+            onPress={handleAppleSignIn}
+          />
+        )}
+
+        {/* Google Sign In */}
+        <TouchableOpacity
+          style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+          onPress={handleGoogleSignIn}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color={colors.textPrimary} />
+          ) : (
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          )}
+        </TouchableOpacity>
 
         {/* Divider */}
         <View style={styles.divider}>
@@ -204,7 +282,7 @@ export default function AuthScreen(): React.ReactElement {
             />
 
             <TouchableOpacity
-              style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+              style={[styles.submitButton, isLoading && styles.buttonDisabled]}
               onPress={handleEmailAuth}
               disabled={isLoading}
             >
@@ -267,6 +345,25 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 50,
   },
+  googleButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: colors.bgElevated,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleButtonText: {
+    fontFamily: typography.fontFamily,
+    fontSize: typography.base,
+    fontWeight: typography.medium,
+    color: colors.textPrimary,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,9 +405,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
   },
   submitButtonText: {
     fontFamily: typography.fontFamily,

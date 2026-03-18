@@ -51,7 +51,7 @@ Every item here is locked. Do not suggest alternatives without a strong reason.
 | Territory system | Uber H3 (resolution 10 or 11) | ~50m hex radius, validate with GPS testing |
 | H3 → GeoJSON | `h3-js` | `cellToBoundary()` for rendering |
 | Backend | Supabase | Auth + Postgres DB + Realtime + Edge Functions |
-| Auth | Sign in with Apple (MVP) | Required by App Store. Google OAuth → V1.0 |
+| Auth | Sign in with Apple (MVP) + Google OAuth (MVP) | Apple required by App Store. Google needed for Android testing. |
 | Push notifications | `expo-notifications` | Zone stolen, friend joined, streak reminder |
 | GPS tracking | `expo-location` | Background tracking during active run only |
 | HealthKit | `expo-health` | iOS only, distance + steps sync |
@@ -461,7 +461,7 @@ RootNavigator
 Sign in with Apple + email · GPS run tracking · H3 conquest + theft · Real-time map · Zone stolen notifications · Run summary + Stories share · Social feed (friends + global) · Friend system (contacts + username) · Weekly + all-time rankings · Profile + streak · Block + report (Apple required) · Delete account + data export (GDPR required) · Notification preferences (Apple required)
 
 ### ❌ Do NOT build
-Teams · Decay system · Hex history · Neighborhood summaries · Friend challenges · Calories/elevation · Audio cues · Google Sign In · Meta friend finding · TikTok share · Light mode toggle · Advanced stats · Premium features
+Teams · Decay system · Hex history · Neighborhood summaries · Friend challenges · Calories/elevation · Audio cues · Meta friend finding · TikTok share · Light mode toggle · Advanced stats · Premium features
 
 ---
 
