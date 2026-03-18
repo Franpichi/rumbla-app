@@ -6,12 +6,16 @@ import {
   StyleSheet,
   SafeAreaView,
 } from 'react-native';
+import { StackScreenProps } from '@react-navigation/stack';
 
 import { useRunStore } from '@/store/runStore';
 import { useGPS } from '@/hooks/useGPS';
 import { useHexConquest } from '@/hooks/useHexConquest';
 import { useAuthStore } from '@/store/authStore';
 import { colors, typography, spacing, radius } from '@/utils/constants';
+import { RunStackParamList } from '@/types/navigation';
+
+type Props = StackScreenProps<RunStackParamList, 'RunHome'>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,7 +31,7 @@ function formatElapsed(seconds: number): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function RunScreen(): React.ReactElement {
+export default function RunScreen({ navigation }: Props): React.ReactElement {
   const { user } = useAuthStore();
 
   const {
@@ -97,11 +101,22 @@ export default function RunScreen(): React.ReactElement {
   }, [isPaused, start, stop]);
 
   const handleStopRun = useCallback((): void => {
+    const finalElapsed   = elapsed;
+    const finalConquered = conqueredCount;
+    const finalStolen    = stolenCount;
+
     stop();
     endRun();
     setElapsed(0);
     setIsPaused(false);
-  }, [stop, endRun]);
+
+    navigation.navigate('RunSummary', {
+      conqueredCount:  finalConquered,
+      stolenCount:     finalStolen,
+      distanceMeters:  0,     // distance tracking via GPS to be wired in Phase 4
+      durationSeconds: finalElapsed,
+    });
+  }, [stop, endRun, elapsed, conqueredCount, stolenCount, navigation]);
 
   // ── Render — idle ──────────────────────────────────────────────────────────
 
