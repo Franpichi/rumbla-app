@@ -1,30 +1,65 @@
 {
   "expo": {
-    "name": "rumbla-app",
+    "name": "Rumbla",
     "slug": "rumbla-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "scheme": "rumbla",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0D0F14"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "app.rumbla",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Rumbla needs your location to paint the map as you run and conquer hexagons.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Rumbla tracks your location during active runs to update your territory in real time.",
+        "NSLocationAlwaysUsageDescription": "Rumbla tracks your location during active runs to update your territory in real time.",
+        "NSMotionUsageDescription": "Rumbla uses motion data to detect when you start and stop running.",
+        "NSContactsUsageDescription": "Rumbla uses your contacts to help you find friends who are already on the app.",
+        "NSHealthShareUsageDescription": "Rumbla reads your workout data to sync your run stats with Apple Health.",
+        "NSHealthUpdateUsageDescription": "Rumbla saves your runs to Apple Health."
+      }
     },
     "android": {
+      "package": "app.rumbla",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0D0F14",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Rumbla tracks your location during active runs to update your territory in real time."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF5C35"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
     }
   }
 }
