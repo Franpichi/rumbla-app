@@ -155,7 +155,7 @@ export default function ProfileScreen(): React.ReactElement {
     } finally {
       setIsLoading(false);
     }
-  }, [user, setUser]);
+  }, [user?.id, user?.city, setUser]);
 
   useEffect(() => {
     loadProfile();

@@ -25,7 +25,14 @@
       "Bash(powershell -Command \"Get-Process -Name ''node'' -ErrorAction SilentlyContinue | Stop-Process -Force\")",
       "Bash(eas build:*)",
       "Bash(eas build:list --platform android --limit 1)",
-      "Bash(adb devices:*)"
+      "Bash(adb devices:*)",
+      "Bash(eas build:download --id 49646711-e756-480c-b37c-f2bcc159e7d4 --output /tmp/rumbla-new.apk)",
+      "Bash(eas build:download --help)",
+      "Bash(eas build:list --platform android --limit 1 --json)",
+      "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices:*)",
+      "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s emulator-5554 install -r /tmp/rumbla-new.apk 2>&1)",
+      "Bash(curl:*)",
+      "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s emulator-5554 reverse tcp:8081 tcp:8081 2>&1)"
     ]
   }
 }
