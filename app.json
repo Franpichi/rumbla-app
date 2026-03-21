@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Rumbla",
-    "slug": "rumbla-app",
+    "slug": "rumbla",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,7 +29,9 @@
       "package": "app.rumbla",
       "adaptiveIcon": {
         "backgroundColor": "#0D0F14",
-        "foregroundImage": "./assets/adaptive-icon.png"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -42,6 +44,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@rnmapbox/maps",
       [
         "expo-location",
         {
@@ -51,14 +54,15 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
+          "icon": "./assets/icon.png",
           "color": "#FF5C35"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "bb109577-28a3-4203-b177-021dd0c72287"
       }
     }
   }
