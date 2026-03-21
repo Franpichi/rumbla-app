@@ -3,8 +3,9 @@
 // @supabase/supabase-js (via jose) calls new TextDecoder('utf-16le') during JWT parsing.
 // We monkey-patch global.TextDecoder to handle utf-16le manually and delegate
 // everything else to the original native implementation.
-
-import 'text-encoding-polyfill';
+// NOTE: text-encoding-polyfill is intentionally NOT imported here — it accesses
+// globals (FormData etc.) that are not yet available during the shim phase,
+// causing [runtime not ready] errors. Hermes has TextEncoder/TextDecoder natively.
 
 (function patchTextDecoder() {
   var OriginalDecoder = global.TextDecoder;
