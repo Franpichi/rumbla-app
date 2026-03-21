@@ -1,3 +1,4 @@
+import 'text-encoding';
 // Supabase client — public anon key only.
 // The service role key is NEVER used here. It lives exclusively in Edge Functions
 // (supabase/functions/*) where it cannot be extracted from the app bundle.
