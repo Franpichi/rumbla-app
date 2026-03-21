@@ -1,4 +1,4 @@
-import 'text-encoding';
+import 'text-encoding-polyfill';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

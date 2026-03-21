@@ -37,7 +37,8 @@
       "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s emulator-5554 install -r /tmp/rumbla-latest.apk 2>&1)",
       "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s emulator-5554 install -r /tmp/rumbla-map.apk 2>&1)",
       "Bash(npx --yes kill-port 8081)",
-      "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s emulator-5554 reverse tcp:8081 tcp:8081)"
+      "Bash(\"C:\\\\Users\\\\fpizz\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -s emulator-5554 reverse tcp:8081 tcp:8081)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }
