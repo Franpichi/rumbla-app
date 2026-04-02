@@ -26,7 +26,8 @@ import { HexagonWithOwner } from '@/types/models';
 MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '');
 
 const MAPBOX_TOKEN   = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ?? '';
-const MAPBOX_STYLE   = process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ?? 'mapbox://styles/mapbox/dark-v11';
+const MAPBOX_STYLE   = process.env.EXPO_PUBLIC_MAPBOX_STYLE_URL ?? 'mapbox://styles/rumbla/cmmwdbrnl001u01sia4i8e69f';
+console.log('[MapScreen] Mapbox style URL:', MAPBOX_STYLE);
 const COPENHAGEN_CENTER: [number, number] = [12.5683, 55.6761];
 const DEFAULT_ZOOM   = 14;
 

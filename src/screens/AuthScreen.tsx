@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   Alert,
 } from 'react-native';
@@ -16,17 +17,36 @@ import * as AuthSession from 'expo-auth-session';
 
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { colors, typography, spacing, radius } from '@/utils/constants';
+import { radius } from '@/utils/constants';
 import { UserProfile } from '@/types/models';
 
 // Required for expo-auth-session OAuth redirect handling on mobile
 WebBrowser.maybeCompleteAuthSession();
 
 // ---------------------------------------------------------------------------
+// Design tokens (per Issue 3 spec)
+// ---------------------------------------------------------------------------
+
+const C = {
+  bg:           '#0D0F14',
+  primary:      '#FF5C35',
+  accent:       '#00E5CC',
+  inputBg:      '#1A1D24',
+  border:       '#2A2D35',
+  textPrimary:  '#FFFFFF',
+  textSecondary:'#888888',
+  error:        '#FF4444',
+} as const;
+
+// ---------------------------------------------------------------------------
 // Profile helpers
 // ---------------------------------------------------------------------------
 
-async function fetchOrCreateProfile(userId: string, displayName: string | null): Promise<UserProfile> {
+async function fetchOrCreateProfile(
+  userId: string,
+  displayName: string | null,
+  username?: string,
+): Promise<UserProfile> {
   const { data: existing, error: fetchError } = await supabase
     .from('profiles')
     .select('*')
@@ -39,13 +59,13 @@ async function fetchOrCreateProfile(userId: string, displayName: string | null):
     throw new Error(fetchError.message);
   }
 
-  // Create a stub profile — user will complete setup in ProfileSetupScreen
-  const username = `user_${userId.slice(0, 8)}`;
+  const resolvedUsername = username?.trim().replace(/^@/, '') || `user_${userId.slice(0, 8)}`;
+
   const { data: created, error: insertError } = await supabase
     .from('profiles')
     .insert({
       id: userId,
-      username,
+      username: resolvedUsername,
       display_name: displayName,
       city: 'Copenhagen',
     })
@@ -57,21 +77,113 @@ async function fetchOrCreateProfile(userId: string, displayName: string | null):
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// Shared sub-components
+// ---------------------------------------------------------------------------
+
+interface InputProps {
+  value:               string;
+  onChangeText:        (t: string) => void;
+  placeholder:         string;
+  keyboardType?:       'default' | 'email-address';
+  autoCapitalize?:     'none' | 'words';
+  secureTextEntry?:    boolean;
+  showToggle?:         boolean;
+  onToggle?:           () => void;
+}
+
+function AuthInput({
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType = 'default',
+  autoCapitalize = 'none',
+  secureTextEntry = false,
+  showToggle = false,
+  onToggle,
+}: InputProps): React.ReactElement {
+  return (
+    <View style={inputStyles.wrapper}>
+      <TextInput
+        style={inputStyles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#555555"
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={false}
+        secureTextEntry={secureTextEntry}
+      />
+      {showToggle && (
+        <TouchableOpacity onPress={onToggle} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={inputStyles.eye}>👁</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const inputStyles = StyleSheet.create({
+  wrapper: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    backgroundColor:  C.inputBg,
+    borderWidth:      1,
+    borderColor:      C.border,
+    borderRadius:     12,
+    paddingHorizontal: 16,
+    paddingVertical:  14,
+  },
+  input: {
+    flex:      1,
+    color:     C.textPrimary,
+    fontSize:  15,
+    padding:   0,
+  },
+  eye: {
+    fontSize: 18,
+    marginLeft: 8,
+  },
+});
+
+function Divider(): React.ReactElement {
+  return (
+    <View style={divStyles.row}>
+      <View style={divStyles.line} />
+      <Text style={divStyles.text}>or</Text>
+      <View style={divStyles.line} />
+    </View>
+  );
+}
+
+const divStyles = StyleSheet.create({
+  row:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  line: { flex: 1, height: 1, backgroundColor: C.border },
+  text: { fontSize: 13, color: C.textSecondary },
+});
+
+// ---------------------------------------------------------------------------
+// Main component
 // ---------------------------------------------------------------------------
 
 export default function AuthScreen(): React.ReactElement {
   const { setUser, setSession } = useAuthStore();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isEmailMode, setIsEmailMode] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // Form state
+  const [isSignUp,       setIsSignUp]       = useState(false);
+  const [username,       setUsername]       = useState('');
+  const [email,          setEmail]          = useState('');
+  const [password,       setPassword]       = useState('');
+  const [showPassword,   setShowPassword]   = useState(false);
+  const [isLoading,      setIsLoading]      = useState(false);
+  const [errorMsg,       setErrorMsg]       = useState<string | null>(null);
+
+  function clearError() { setErrorMsg(null); }
 
   // ── Apple Sign In ──────────────────────────────────────────────────────────
 
   async function handleAppleSignIn(): Promise<void> {
+    clearError();
     try {
       setIsLoading(true);
 
@@ -97,7 +209,6 @@ export default function AuthScreen(): React.ReactElement {
         : null;
 
       const profile = await fetchOrCreateProfile(data.user.id, displayName);
-
       setSession(data.session);
       setUser(profile);
     } catch (err: unknown) {
@@ -105,7 +216,6 @@ export default function AuthScreen(): React.ReactElement {
         err instanceof Error &&
         (err as { code?: string }).code === 'ERR_REQUEST_CANCELED'
       ) {
-        // User dismissed the Apple sheet — not an error
         return;
       }
       Alert.alert('Sign in failed', err instanceof Error ? err.message : 'Unknown error');
@@ -117,43 +227,32 @@ export default function AuthScreen(): React.ReactElement {
   // ── Google Sign In ─────────────────────────────────────────────────────────
 
   async function handleGoogleSignIn(): Promise<void> {
+    clearError();
     try {
       setIsLoading(true);
 
-      // Build the redirect URI that Supabase will send the user back to
       const redirectUri = AuthSession.makeRedirectUri();
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUri,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          queryParams: { access_type: 'offline', prompt: 'consent' },
         },
       });
 
       if (error) throw new Error(error.message);
       if (!data.url) throw new Error('No OAuth URL returned from Supabase.');
 
-      // Open the Google consent screen in an in-app browser
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+      if (result.type !== 'success') return;
 
-      if (result.type !== 'success') {
-        // User cancelled or browser closed — not an error
-        return;
-      }
-
-      // Extract the session tokens from the redirect URL
-      const url = result.url;
+      const url    = result.url;
       const params = new URLSearchParams(url.split('#')[1] ?? url.split('?')[1] ?? '');
       const accessToken  = params.get('access_token');
       const refreshToken = params.get('refresh_token');
 
-      if (!accessToken || !refreshToken) {
-        throw new Error('Missing tokens in OAuth redirect.');
-      }
+      if (!accessToken || !refreshToken) throw new Error('Missing tokens in OAuth redirect.');
 
       const { data: sessionData, error: sessionError } =
         await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
@@ -163,21 +262,21 @@ export default function AuthScreen(): React.ReactElement {
 
       const displayName = sessionData.user.user_metadata?.full_name as string | null ?? null;
       const profile = await fetchOrCreateProfile(sessionData.user.id, displayName);
-
       setSession(sessionData.session);
       setUser(profile);
     } catch (err: unknown) {
-      Alert.alert('Google sign in failed', err instanceof Error ? err.message : 'Unknown error');
+      setErrorMsg(err instanceof Error ? err.message : 'Google sign in failed.');
     } finally {
       setIsLoading(false);
     }
   }
 
-  // ── Email Sign In / Sign Up ────────────────────────────────────────────────
+  // ── Email Auth ─────────────────────────────────────────────────────────────
 
   async function handleEmailAuth(): Promise<void> {
+    clearError();
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing fields', 'Enter your email and password.');
+      setErrorMsg('Please enter your email and password.');
       return;
     }
 
@@ -191,7 +290,7 @@ export default function AuthScreen(): React.ReactElement {
           Alert.alert('Check your email', 'A confirmation link has been sent.');
           return;
         }
-        const profile = await fetchOrCreateProfile(data.user.id, null);
+        const profile = await fetchOrCreateProfile(data.user.id, null, username);
         setSession(data.session);
         setUser(profile);
       } else {
@@ -203,7 +302,7 @@ export default function AuthScreen(): React.ReactElement {
         setUser(profile);
       }
     } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
+      setErrorMsg(err instanceof Error ? err.message : 'Authentication failed.');
     } finally {
       setIsLoading(false);
     }
@@ -213,11 +312,16 @@ export default function AuthScreen(): React.ReactElement {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.inner}>
-        {/* Logo / headline */}
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
         <Text style={styles.logo}>RUMBLA</Text>
         <Text style={styles.tagline}>Conquer your city, street by street.</Text>
 
@@ -226,85 +330,91 @@ export default function AuthScreen(): React.ReactElement {
           <AppleAuthentication.AppleAuthenticationButton
             buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
             buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-            cornerRadius={radius.md}
+            cornerRadius={12}
             style={styles.appleButton}
             onPress={handleAppleSignIn}
           />
         )}
 
-        {/* Google Sign In */}
+        {/* Google */}
         <TouchableOpacity
-          style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+          style={[styles.googleButton, isLoading && styles.disabled]}
           onPress={handleGoogleSignIn}
           disabled={isLoading}
+          activeOpacity={0.85}
         >
-          {isLoading ? (
-            <ActivityIndicator color={colors.textPrimary} />
-          ) : (
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          )}
+          <Text style={styles.googleG}>G</Text>
+          <Text style={styles.googleText}>Continue with Google</Text>
         </TouchableOpacity>
 
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
+        <Divider />
 
-        {/* Email fallback toggle */}
-        {!isEmailMode ? (
-          <TouchableOpacity
-            style={styles.emailToggle}
-            onPress={() => setIsEmailMode(true)}
-          >
-            <Text style={styles.emailToggleText}>Continue with email</Text>
-          </TouchableOpacity>
-        ) : (
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={colors.textDisabled}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={colors.textDisabled}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            <TouchableOpacity
-              style={[styles.submitButton, isLoading && styles.buttonDisabled]}
-              onPress={handleEmailAuth}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color={colors.textPrimary} />
-              ) : (
-                <Text style={styles.submitButtonText}>
-                  {isSignUp ? 'Create account' : 'Sign in'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setIsSignUp((v) => !v)}>
-              <Text style={styles.switchModeText}>
-                {isSignUp
-                  ? 'Already have an account? Sign in'
-                  : "Don't have an account? Sign up"}
-              </Text>
-            </TouchableOpacity>
-          </>
+        {/* Sign-up only: username */}
+        {isSignUp && (
+          <AuthInput
+            value={username}
+            onChangeText={setUsername}
+            placeholder="@username"
+          />
         )}
-      </View>
+
+        {/* Email */}
+        <AuthInput
+          value={email}
+          onChangeText={setEmail}
+          placeholder="Email"
+          keyboardType="email-address"
+        />
+
+        {/* Password */}
+        <AuthInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Password"
+          secureTextEntry={!showPassword}
+          showToggle
+          onToggle={() => setShowPassword((v) => !v)}
+        />
+
+        {/* Forgot password — sign-in only */}
+        {!isSignUp && (
+          <TouchableOpacity style={styles.forgotWrap} activeOpacity={0.7}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Error */}
+        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+
+        {/* Loading indicator */}
+        {isLoading ? (
+          <ActivityIndicator color={C.primary} style={styles.loader} />
+        ) : null}
+
+        {/* Primary CTA */}
+        <TouchableOpacity
+          style={[styles.primaryButton, isLoading && styles.disabled]}
+          onPress={handleEmailAuth}
+          disabled={isLoading}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.primaryButtonText}>
+            {isSignUp ? 'Create Account' : 'Sign In'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Switch mode */}
+        <View style={styles.switchRow}>
+          <Text style={styles.switchBase}>
+            {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+          </Text>
+          <TouchableOpacity onPress={() => { setIsSignUp((v) => !v); clearError(); }}>
+            <Text style={styles.switchLink}>
+              {isSignUp ? 'Sign in' : 'Sign up'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -314,108 +424,113 @@ export default function AuthScreen(): React.ReactElement {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
-    backgroundColor: colors.bgBase,
+    backgroundColor: C.bg,
   },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+  scroll: {
+    paddingHorizontal: 24,
+    paddingBottom: 48,
+    gap: 14,
   },
+
+  // Header
   logo: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.xxl,
-    fontWeight: typography.bold,
-    color: colors.accent,
-    textAlign: 'center',
+    fontSize:    42,
+    fontWeight:  '700',
+    color:       C.primary,
+    textAlign:   'center',
     letterSpacing: 4,
-    marginBottom: spacing.xs,
+    marginTop:   80,
   },
   tagline: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.sm,
-    fontWeight: typography.regular,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
+    fontSize:     13,
+    color:        C.textSecondary,
+    textAlign:    'center',
+    marginBottom: 34,
   },
+
+  // Apple
   appleButton: {
     width: '100%',
-    height: 50,
+    height: 52,
+    borderRadius: 12,
   },
+
+  // Google
   googleButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: radius.md,
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius:    12,
+    height:          52,
+    gap:             10,
   },
-  googleButtonText: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.base,
-    fontWeight: typography.medium,
-    color: colors.textPrimary,
+  googleG: {
+    fontSize:    18,
+    fontWeight:  '700',
+    color:       C.primary,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  googleText: {
+    fontSize:   15,
+    fontWeight: '600',
+    color:      '#000000',
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+
+  // Forgot password
+  forgotWrap: {
+    alignSelf: 'flex-end',
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.borderSubtle,
+  forgotText: {
+    fontSize: 13,
+    color:    C.accent,
   },
-  dividerText: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.sm,
-    color: colors.textDisabled,
-  },
-  emailToggle: {
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
-  emailToggleText: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.base,
-    fontWeight: typography.medium,
-    color: colors.textSecondary,
-  },
-  input: {
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    fontFamily: typography.fontFamily,
-    fontSize: typography.base,
-    color: colors.textPrimary,
-  },
-  submitButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.base,
-    fontWeight: typography.semibold,
-    color: colors.textPrimary,
-  },
-  switchModeText: {
-    fontFamily: typography.fontFamily,
-    fontSize: typography.sm,
-    color: colors.textSecondary,
+
+  // Error
+  error: {
+    fontSize: 13,
+    color:    C.error,
     textAlign: 'center',
+  },
+
+  // Loader
+  loader: {
+    alignSelf: 'center',
+  },
+
+  // Primary CTA
+  primaryButton: {
+    backgroundColor: C.primary,
+    borderRadius:    12,
+    height:          52,
+    justifyContent:  'center',
+    alignItems:      'center',
+  },
+  primaryButtonText: {
+    fontSize:   15,
+    fontWeight: '700',
+    color:      '#FFFFFF',
+  },
+
+  // Switch mode
+  switchRow: {
+    flexDirection:  'row',
+    justifyContent: 'center',
+    alignItems:     'center',
+    marginTop:      4,
+  },
+  switchBase: {
+    fontSize: 13,
+    color:    C.textSecondary,
+  },
+  switchLink: {
+    fontSize:   13,
+    color:      C.accent,
+    fontWeight: '600',
+  },
+
+  disabled: {
+    opacity: 0.55,
   },
 });
