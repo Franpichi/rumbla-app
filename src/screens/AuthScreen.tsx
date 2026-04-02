@@ -177,8 +177,14 @@ export default function AuthScreen(): React.ReactElement {
   const [showPassword,   setShowPassword]   = useState(false);
   const [isLoading,      setIsLoading]      = useState(false);
   const [errorMsg,       setErrorMsg]       = useState<string | null>(null);
+  const [showResend,     setShowResend]     = useState(false);
+  const [resendSent,     setResendSent]     = useState(false);
 
-  function clearError() { setErrorMsg(null); }
+  function clearError() {
+    setErrorMsg(null);
+    setShowResend(false);
+    setResendSent(false);
+  }
 
   // ── Apple Sign In ──────────────────────────────────────────────────────────
 
@@ -286,16 +292,36 @@ export default function AuthScreen(): React.ReactElement {
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw new Error(error.message);
-        if (!data.session || !data.user) {
-          Alert.alert('Check your email', 'A confirmation link has been sent.');
+        if (!data.user) throw new Error('Sign up failed — no user returned.');
+
+        // Always attempt profile creation here so the username is persisted.
+        // This succeeds immediately when Supabase auto-confirms; if confirmation
+        // is required the insert may fail silently (RLS) — fetchOrCreateProfile
+        // will retry on the next sign-in.
+        try {
+          await fetchOrCreateProfile(data.user.id, null, username);
+        } catch {
+          // Non-fatal: profile will be created (without custom username) on sign-in
+        }
+
+        if (!data.session) {
+          setErrorMsg('Check your email to confirm your account before signing in.');
           return;
         }
+
         const profile = await fetchOrCreateProfile(data.user.id, null, username);
         setSession(data.session);
         setUser(profile);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(error.message);
+        if (error) {
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            setErrorMsg('Please confirm your email first. Check your inbox for a confirmation link.');
+            setShowResend(true);
+            return;
+          }
+          throw new Error(error.message);
+        }
         if (!data.session || !data.user) throw new Error('No session returned.');
         const profile = await fetchOrCreateProfile(data.user.id, null);
         setSession(data.session);
@@ -303,6 +329,21 @@ export default function AuthScreen(): React.ReactElement {
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Authentication failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // ── Resend confirmation email ─────────────────────────────────────────────
+
+  async function handleResendConfirmation(): Promise<void> {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      if (error) throw new Error(error.message);
+      setResendSent(true);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to resend email.');
     } finally {
       setIsLoading(false);
     }
@@ -385,6 +426,21 @@ export default function AuthScreen(): React.ReactElement {
 
         {/* Error */}
         {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+
+        {/* Resend confirmation email */}
+        {showResend && !resendSent && (
+          <TouchableOpacity
+            style={styles.resendButton}
+            onPress={handleResendConfirmation}
+            disabled={isLoading}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.resendText}>Resend confirmation email</Text>
+          </TouchableOpacity>
+        )}
+        {resendSent && (
+          <Text style={styles.resendSent}>Email sent! Check your inbox.</Text>
+        )}
 
         {/* Loading indicator */}
         {isLoading ? (
@@ -528,6 +584,22 @@ const styles = StyleSheet.create({
     fontSize:   13,
     color:      C.accent,
     fontWeight: '600',
+  },
+
+  // Resend confirmation
+  resendButton: {
+    alignSelf:  'center',
+    paddingVertical: 6,
+  },
+  resendText: {
+    fontSize:   13,
+    color:      C.accent,
+    fontWeight: '600',
+  },
+  resendSent: {
+    fontSize:  13,
+    color:     C.accent,
+    textAlign: 'center',
   },
 
   disabled: {
