@@ -27,9 +27,4 @@ config.transformer.getTransformOptions = async (entryPoints, options, getDepende
   };
 };
 
-config.serializer = {
-  ...config.serializer,
-  getModulesRunBeforeMainModule: () => [require.resolve('./shim.js')],
-};
-
 module.exports = config;
